@@ -403,10 +403,6 @@ function renderGrid(str) {
 
     const cell = document.createElement('div');
     cell.className = 'cell';
-
-    if (r === 2 || r === 5) cell.classList.add('sepR');
-    if (c === 2 || c === 5) cell.classList.add('sepC');
-
     cell.textContent = v;
     grid.appendChild(cell);
   }
@@ -415,14 +411,6 @@ function renderGrid(str) {
   box.className = 'gridBox';
   box.appendChild(grid);
   return box;
-}
-
-function setShareLink(puzzleString) {
-  const linkEl = document.getElementById('shareLink');
-  const base = new URL(window.location.href);
-  base.searchParams.set('p', puzzleString);
-  linkEl.href = base.toString();
-  linkEl.textContent = 'link';
 }
 
 function showError(msg) {
@@ -442,8 +430,6 @@ function buildResultUI(result) {
 
   lastResultJson = JSON.stringify(result, null, 2);
   document.getElementById('copyJsonBtn').disabled = false;
-
-  setShareLink(result.input.replaceAll(/\s+/g, ''));
 
   const card1 = document.createElement('div');
   card1.className = 'card';
@@ -513,25 +499,132 @@ function normalizeInput(s) {
   return String(s || '').trim().replaceAll(/\s+/g, '');
 }
 
-const examples = [
-  "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......",
-  "52...6.........7.13...........4..8..6......5...........418.........3..2...87.....",
-  "6.....8.3.4.7.................5.4.7.3..2.....1.6.......2.....5.....8.7..9.....4..",
-  ".....6....59.....82....8....45........3........6..3.54...325..6..................",
-  "1.....7.9.3..2....8..96..5....53..9...1..8...26....4..3......1..4......7..7...3.."
-];
+function getPuzzleStringFromTextarea() {
+  const raw = document.getElementById('puzzle').value;
+  return normalizeInput(raw);
+}
 
-
-let exampleIndex = 0;
-
-function setPuzzleValue(p) {
+function setTextareaPuzzleString(p) {
   document.getElementById('puzzle').value = p;
-  document.getElementById('copyJsonBtn').disabled = true;
-  lastResultJson = null;
-  document.getElementById('out').innerHTML = '';
-  const shareEl = document.getElementById('shareLink');
-  shareEl.href = '#';
-  shareEl.textContent = '—';
+  updateLengthHint(p);
+}
+
+function updateLengthHint(p) {
+  const el = document.getElementById('lenHint');
+  const n = String(p || '').length;
+  el.textContent = `String length: ${n}`;
+}
+
+function makeShareUrl(puzzleString) {
+  const u = new URL(window.location.href);
+  u.searchParams.set('p', puzzleString);
+  return u.toString();
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function gentlePromptCopy(text) {
+  window.prompt('Copy this link:', text);
+}
+
+function getPuzzleStringFromGrid() {
+  const inputs = document.querySelectorAll('.sCell');
+  let out = '';
+  for (const inp of inputs) {
+    const v = String(inp.value || '').trim();
+    if (!v) out += '.';
+    else if (v >= '1' && v <= '9') out += v;
+    else out += '.';
+  }
+  return out;
+}
+
+function setGridFromPuzzleString(p) {
+  const s = String(p || '').padEnd(81, '.').slice(0, 81);
+  const inputs = document.querySelectorAll('.sCell');
+  for (let i = 0; i < inputs.length; i++) {
+    const ch = s[i];
+    inputs[i].value = (ch >= '1' && ch <= '9') ? ch : '';
+  }
+}
+
+let syncing = false;
+
+function syncFromGridToTextarea() {
+  if (syncing) return;
+  syncing = true;
+  const p = getPuzzleStringFromGrid();
+  setTextareaPuzzleString(p);
+  syncing = false;
+}
+
+function syncFromTextareaToGrid() {
+  if (syncing) return;
+  syncing = true;
+  const p = getPuzzleStringFromTextarea();
+  if (p.length <= 81 && /^[0-9.]*$/.test(p)) {
+    const padded = p.padEnd(81, '.').slice(0, 81);
+    setGridFromPuzzleString(padded.replaceAll('0', '.'));
+    setTextareaPuzzleString(p);
+  } else {
+    updateLengthHint(p);
+  }
+  syncing = false;
+}
+
+function moveFocus(currentIndex, dx, dy) {
+  const r = Math.floor(currentIndex / 9);
+  const c = currentIndex % 9;
+  const nr = Math.max(0, Math.min(8, r + dy));
+  const nc = Math.max(0, Math.min(8, c + dx));
+  const idx = nr * 9 + nc;
+  const inputs = document.querySelectorAll('.sCell');
+  if (inputs[idx]) inputs[idx].focus();
+}
+
+function buildInputGrid() {
+  const root = document.getElementById('sGrid');
+  root.innerHTML = '';
+  for (let i = 0; i < 81; i++) {
+    const r = Math.floor(i / 9);
+    const c = i % 9;
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.inputMode = 'numeric';
+    inp.maxLength = 1;
+    inp.className = 'sCell';
+    inp.setAttribute('aria-label', `Row ${r + 1} Column ${c + 1}`);
+    if (c === 2 || c === 5) inp.classList.add('bdrR');
+    if (r === 2 || r === 5) inp.classList.add('bdrB');
+
+    inp.addEventListener('input', () => {
+      const v = String(inp.value || '').replaceAll(/[^1-9]/g, '');
+      inp.value = v;
+      syncFromGridToTextarea();
+      if (v) moveFocus(i, 1, 0);
+    });
+
+    inp.addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (k === 'ArrowLeft') { e.preventDefault(); moveFocus(i, -1, 0); }
+      else if (k === 'ArrowRight') { e.preventDefault(); moveFocus(i, 1, 0); }
+      else if (k === 'ArrowUp') { e.preventDefault(); moveFocus(i, 0, -1); }
+      else if (k === 'ArrowDown') { e.preventDefault(); moveFocus(i, 0, 1); }
+      else if (k === 'Backspace' || k === 'Delete') {
+        inp.value = '';
+        syncFromGridToTextarea();
+      }
+    });
+
+    root.appendChild(inp);
+  }
 }
 
 function analyzeCurrent() {
@@ -539,9 +632,9 @@ function analyzeCurrent() {
   btn.disabled = true;
 
   try {
-    const raw = document.getElementById('puzzle').value;
-    const input = normalizeInput(raw);
-    const result = analyzePuzzle(input);
+    const input = getPuzzleStringFromTextarea();
+    if (input.length !== 81) throw new Error('Puzzle must be 81 characters.');
+    const result = analyzePuzzle(input.replaceAll('0', '.'));
     buildResultUI(result);
   } catch (e) {
     showError(String(e && e.message ? e.message : e));
@@ -550,33 +643,73 @@ function analyzeCurrent() {
   }
 }
 
+const examples = [
+  "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......",
+  "52...6.........7.13...........4..8..6......5...........418.........3..2...87.....",
+  "6.....8.3.4.7.................5.4.7.3..2.....1.6.......2.....5.....8.7..9.....4..",
+  ".....6....59.....82....8....45........3........6..3.54...325..6..................",
+  "1.....7.9.3..2....8..96..5....53..9...1..8...26....4..3......1..4......7..7...3.."
+];
+
+let exampleIndex = 0;
+
+function setPuzzleEverywhere(p) {
+  setTextareaPuzzleString(p);
+  setGridFromPuzzleString(p.replaceAll('0', '.'));
+  document.getElementById('copyJsonBtn').disabled = true;
+  lastResultJson = null;
+  document.getElementById('out').innerHTML = '';
+}
+
 document.getElementById('analyzeBtn').addEventListener('click', analyzeCurrent);
 
 document.getElementById('anotherExampleBtn').addEventListener('click', () => {
   exampleIndex = (exampleIndex + 1) % examples.length;
-  setPuzzleValue(examples[exampleIndex]);
+  setPuzzleEverywhere(examples[exampleIndex]);
+  updateLengthHint(examples[exampleIndex]);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  setPuzzleEverywhere('.'.repeat(81));
+  updateLengthHint('.'.repeat(81));
 });
 
 document.getElementById('copyJsonBtn').addEventListener('click', async () => {
   if (!lastResultJson) return;
+  const ok = await copyToClipboard(lastResultJson);
+  const btn = document.getElementById('copyJsonBtn');
+  const old = btn.textContent;
+  btn.textContent = ok ? 'Copied' : 'Copy failed';
+  setTimeout(() => { btn.textContent = old; }, 900);
+  if (!ok) showError('Copy failed. Your browser may block clipboard access on this page.');
+});
+
+document.getElementById('shareBtn').addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(lastResultJson);
-    const btn = document.getElementById('copyJsonBtn');
+    const input = getPuzzleStringFromTextarea();
+    if (input.length !== 81) throw new Error('Puzzle must be 81 characters to share.');
+    const url = makeShareUrl(input.replaceAll('0', '.'));
+    const ok = await copyToClipboard(url);
+    const btn = document.getElementById('shareBtn');
     const old = btn.textContent;
-    btn.textContent = 'Copied';
+    btn.textContent = ok ? 'Copied' : 'Copy';
     setTimeout(() => { btn.textContent = old; }, 900);
+    if (!ok) gentlePromptCopy(url);
   } catch (e) {
-    showError('Copy failed. Your browser may block clipboard access on this page.');
+    showError(String(e && e.message ? e.message : e));
   }
 });
 
-(function initFromUrl() {
+document.getElementById('puzzle').addEventListener('input', () => {
+  syncFromTextareaToGrid();
+});
+
+(function init() {
+  buildInputGrid();
+
   const url = new URL(window.location.href);
   const p = url.searchParams.get('p');
-  if (p && String(p).trim().length === 81) {
-    setPuzzleValue(String(p).trim());
-    analyzeCurrent();
-  } else {
-    setPuzzleValue(examples[0]);
-  }
+  const initial = (p && String(p).trim().length === 81) ? String(p).trim() : examples[0];
+  setPuzzleEverywhere(initial);
+  updateLengthHint(initial);
 })();

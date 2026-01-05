@@ -20,10 +20,8 @@ Puzzles are provided as a single 81-character string:
 - Use `.` or `0` for empty cells
 
 ## Notes
-This project is intentionally lightweight and runs entirely in the browser.  
-No external libraries or server-side components are required.
+This project runs entirely in the browser. No external libraries or server-side components are required.
 
 ## Related
 If you enjoy logic and number puzzles, you might also like  
 https://www.sudoku4adults.com
-
