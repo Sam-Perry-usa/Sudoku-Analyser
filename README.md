@@ -20,7 +20,7 @@ Puzzles are provided as a single 81-character string:
 - Use `.` or `0` for empty cells
 
 ## Notes
-This project runs entirely in the browser. No external libraries or server-side components are required.
+This project runs entirely in the browser. Some puzzles can be expensive to verify, so the uniqueness check runs in a time-limited worker to keep the page responsive.
 
 ## Related
 If you enjoy logic and number puzzles, you might also like  

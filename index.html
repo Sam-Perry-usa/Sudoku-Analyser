@@ -28,13 +28,14 @@
     .cell { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border: 1px solid #eee; border-radius: 10px; background: var(--soft); font-family: ui-monospace,Menlo,Consolas,monospace; }
     details pre { white-space: pre-wrap; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; overflow:auto; }
     .error { padding: 12px; border: 1px solid #ffb3d6; background: #fff5fb; border-radius: 12px; }
+    .status { padding: 12px; border: 1px solid #d7d7d7; background: #fff; border-radius: 12px; color: var(--muted); }
     a { color:#111; }
     .topbar { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; }
     .pill { background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 10px; display:flex; gap:8px; align-items:center; }
     footer { margin-top: 18px; font-size: 13px; color: var(--muted); }
     .builder { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
     .builderLeft { min-width: 360px; }
-    .builderRight { flex: 1edit; min-width: 340px; flex: 1; }
+    .builderRight { flex: 1; min-width: 340px; }
     .sGrid { display:grid; grid-template-columns: repeat(9, 36px); gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background:#fff; }
     .sCell {
       width: 36px; height: 36px;
@@ -83,7 +84,7 @@
       <div class="builderRight">
         <textarea id="puzzle" spellcheck="false" class="mono" placeholder="Example: 4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"></textarea>
         <div class="subtle">
-          The grid and the string stay in sync. The string is always the source used for analysis.
+          The grid and the string stay in sync. Analysis uses the string.
         </div>
       </div>
     </div>

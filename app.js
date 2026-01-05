@@ -226,58 +226,7 @@ function applyNakedPairs(grid, cand, steps) {
   return changed;
 }
 
-function pickNextCellMRV(grid) {
-  let best = null;
-  let bestCand = null;
-
-  for (let r = 0; r < 9; r++) {
-    for (let c = 0; c < 9; c++) {
-      if (grid[r][c]) continue;
-      const cand = candidatesFor(grid, r, c);
-      if (cand.length === 0) return { r, c, cand: [] };
-      if (!best || cand.length < bestCand.length) {
-        best = { r, c };
-        bestCand = cand;
-        if (cand.length === 1) return { r, c, cand };
-      }
-    }
-  }
-
-  if (!best) return null;
-  return { r: best.r, c: best.c, cand: bestCand };
-}
-
-function solveByBacktracking(grid, maxSolutions = 2) {
-  const g = cloneGrid(grid);
-  let count = 0;
-  let solution = null;
-
-  function dfs() {
-    if (count >= maxSolutions) return;
-
-    const next = pickNextCellMRV(g);
-    if (!next) {
-      count++;
-      if (count === 1) solution = cloneGrid(g);
-      return;
-    }
-    if (next.cand.length === 0) return;
-
-    const { r, c, cand } = next;
-    for (const v of cand) {
-      g[r][c] = v;
-      if (isValidGrid(g)) dfs();
-      g[r][c] = 0;
-      if (count >= maxSolutions) return;
-    }
-  }
-
-  if (!isValidGrid(g)) return { count: 0, solution: null };
-  dfs();
-  return { count, solution };
-}
-
-function humanSolve(grid, maxSteps = 10000) {
+function humanSolve(grid, maxSteps = 15000) {
   if (!isValidGrid(grid)) {
     return { status: 'invalid', grid, steps: [], usedBacktracking: false };
   }
@@ -301,14 +250,7 @@ function humanSolve(grid, maxSteps = 10000) {
     if (progress) continue;
 
     usedBacktracking = true;
-    const solved = solveByBacktracking(grid, 2);
-    if (solved.count === 1 && solved.solution) {
-      for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) grid[r][c] = solved.solution[r][c];
-      steps.push({ technique: 'backtracking_fill' });
-      return { status: 'solved', grid, steps, usedBacktracking };
-    }
-    if (solved.count === 0) return { status: 'no_solution', grid, steps, usedBacktracking };
-    return { status: 'multiple_solutions', grid, steps, usedBacktracking };
+    return { status: 'needs_backtracking', grid, steps, usedBacktracking };
   }
 
   return { status: 'stopped', grid, steps, usedBacktracking };
@@ -317,12 +259,7 @@ function humanSolve(grid, maxSteps = 10000) {
 function estimateDifficulty(techniques, usedBacktracking) {
   if (usedBacktracking) return 'Extreme';
 
-  const rank = {
-    naked_single: 1,
-    hidden_single: 2,
-    naked_pair: 3
-  };
-
+  const rank = { naked_single: 1, hidden_single: 2, naked_pair: 3 };
   let max = 0;
   for (const t of techniques) max = Math.max(max, rank[t] || 0);
 
@@ -330,56 +267,6 @@ function estimateDifficulty(techniques, usedBacktracking) {
   if (max === 2) return 'Medium';
   if (max === 3) return 'Hard';
   return 'Hard';
-}
-
-function analyzePuzzle(puzzleString) {
-  const grid = parsePuzzle(puzzleString);
-  const valid = isValidGrid(grid);
-
-  if (!valid) {
-    return {
-      input: puzzleString,
-      validity: 'invalid',
-      solutions: 0,
-      solved: false,
-      difficulty: 'Invalid',
-      techniques: [],
-      steps: [],
-      solution: null
-    };
-  }
-
-  const solutionInfo = solveByBacktracking(grid, 2);
-  const solutions = solutionInfo.count;
-
-  if (solutions === 0) {
-    return {
-      input: puzzleString,
-      validity: 'valid',
-      solutions: 0,
-      solved: false,
-      difficulty: 'Unsolvable',
-      techniques: [],
-      steps: [],
-      solution: null
-    };
-  }
-
-  const toSolve = parsePuzzle(puzzleString);
-  const human = humanSolve(toSolve);
-  const techniques = Array.from(new Set(human.steps.map(s => s.technique)));
-  const difficulty = estimateDifficulty(techniques, human.usedBacktracking);
-
-  return {
-    input: puzzleString,
-    validity: 'valid',
-    solutions,
-    solved: human.status === 'solved',
-    difficulty,
-    techniques,
-    steps: human.steps.slice(0, 5000),
-    solution: solutionInfo.solution ? gridToString(solutionInfo.solution) : null
-  };
 }
 
 function escapeHtml(s) {
@@ -397,10 +284,7 @@ function renderGrid(str) {
   grid.className = 'grid';
 
   for (let i = 0; i < 81; i++) {
-    const r = Math.floor(i / 9);
-    const c = i % 9;
     const v = s[i] === '.' ? '' : s[i];
-
     const cell = document.createElement('div');
     cell.className = 'cell';
     cell.textContent = v;
@@ -422,6 +306,15 @@ function showError(msg) {
   out.appendChild(card);
 }
 
+function showStatus(msg) {
+  const out = document.getElementById('out');
+  out.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'status';
+  card.textContent = msg;
+  out.appendChild(card);
+}
+
 let lastResultJson = null;
 
 function buildResultUI(result) {
@@ -438,9 +331,9 @@ function buildResultUI(result) {
   kv.className = 'kv';
   kv.innerHTML = `
     <div><strong>Validity:</strong> ${escapeHtml(result.validity)}</div>
-    <div><strong>Solutions:</strong> ${escapeHtml(result.solutions)}</div>
+    <div><strong>Solutions:</strong> ${escapeHtml(String(result.solutions))}</div>
     <div><strong>Difficulty:</strong> ${escapeHtml(result.difficulty)}</div>
-    <div><strong>Solved:</strong> ${escapeHtml(result.solved)}</div>
+    <div><strong>Solved:</strong> ${escapeHtml(String(result.solved))}</div>
   `;
   card1.appendChild(kv);
 
@@ -467,7 +360,7 @@ function buildResultUI(result) {
   else {
     const msg = document.createElement('div');
     msg.style.color = '#666';
-    msg.textContent = 'No solution grid available.';
+    msg.textContent = result.solution_note || 'No solution grid available.';
     right.appendChild(msg);
   }
 
@@ -499,20 +392,9 @@ function normalizeInput(s) {
   return String(s || '').trim().replaceAll(/\s+/g, '');
 }
 
-function getPuzzleStringFromTextarea() {
-  const raw = document.getElementById('puzzle').value;
-  return normalizeInput(raw);
-}
-
-function setTextareaPuzzleString(p) {
-  document.getElementById('puzzle').value = p;
-  updateLengthHint(p);
-}
-
 function updateLengthHint(p) {
   const el = document.getElementById('lenHint');
-  const n = String(p || '').length;
-  el.textContent = `String length: ${n}`;
+  el.textContent = `String length: ${String(p || '').length}`;
 }
 
 function makeShareUrl(puzzleString) {
@@ -539,9 +421,7 @@ function getPuzzleStringFromGrid() {
   let out = '';
   for (const inp of inputs) {
     const v = String(inp.value || '').trim();
-    if (!v) out += '.';
-    else if (v >= '1' && v <= '9') out += v;
-    else out += '.';
+    out += (v >= '1' && v <= '9') ? v : '.';
   }
   return out;
 }
@@ -557,6 +437,11 @@ function setGridFromPuzzleString(p) {
 
 let syncing = false;
 
+function setTextareaPuzzleString(p) {
+  document.getElementById('puzzle').value = p;
+  updateLengthHint(p);
+}
+
 function syncFromGridToTextarea() {
   if (syncing) return;
   syncing = true;
@@ -568,13 +453,11 @@ function syncFromGridToTextarea() {
 function syncFromTextareaToGrid() {
   if (syncing) return;
   syncing = true;
-  const p = getPuzzleStringFromTextarea();
+  const p = normalizeInput(document.getElementById('puzzle').value);
+  updateLengthHint(p);
   if (p.length <= 81 && /^[0-9.]*$/.test(p)) {
     const padded = p.padEnd(81, '.').slice(0, 81);
     setGridFromPuzzleString(padded.replaceAll('0', '.'));
-    setTextareaPuzzleString(p);
-  } else {
-    updateLengthHint(p);
   }
   syncing = false;
 }
@@ -627,14 +510,110 @@ function buildInputGrid() {
   }
 }
 
-function analyzeCurrent() {
+function workerSolve(puzzleString, maxSolutions, timeLimitMs) {
+  return new Promise((resolve, reject) => {
+    if (!window.Worker) {
+      reject(new Error('Web Worker not available.'));
+      return;
+    }
+    const w = new Worker('./worker.js');
+    const done = (res) => {
+      try { w.terminate(); } catch (_) {}
+      resolve(res);
+    };
+    w.onmessage = (ev) => done(ev.data);
+    w.onerror = (err) => {
+      try { w.terminate(); } catch (_) {}
+      reject(err);
+    };
+    w.postMessage({ puzzle: puzzleString, maxSolutions, timeLimitMs });
+  });
+}
+
+async function analyzePuzzleAsync(puzzleString) {
+  const grid = parsePuzzle(puzzleString);
+  const valid = isValidGrid(grid);
+
+  if (!valid) {
+    return { input: puzzleString, validity: 'invalid', solutions: 0, solved: false, difficulty: 'Invalid', techniques: [], steps: [], solution: null };
+  }
+
+  // First: do lightweight logical solve (never expensive)
+  const toSolve = parsePuzzle(puzzleString);
+  const human = humanSolve(toSolve);
+  const techniques = Array.from(new Set(human.steps.map(s => s.technique)));
+  const difficulty = estimateDifficulty(techniques, human.usedBacktracking);
+
+  // Second: uniqueness + a solution via Worker (time-limited, no UI freeze)
+  const uniq = await workerSolve(puzzleString, 2, 900);
+
+  if (!uniq || !uniq.ok) {
+    return {
+      input: puzzleString,
+      validity: 'valid',
+      solutions: 'unknown',
+      solved: human.status === 'solved',
+      difficulty,
+      techniques,
+      steps: human.steps.slice(0, 5000),
+      solution: null,
+      solution_note: 'Solver worker error.'
+    };
+  }
+
+  if (uniq.status === 'timeout') {
+    return {
+      input: puzzleString,
+      validity: 'valid',
+      solutions: 'unknown',
+      solved: human.status === 'solved',
+      difficulty: human.usedBacktracking ? 'Extreme' : difficulty,
+      techniques,
+      steps: human.steps.slice(0, 5000),
+      solution: uniq.solution,
+      solution_note: 'This puzzle is taking a long time to fully verify.'
+    };
+  }
+
+  const solutions = uniq.count;
+
+  if (solutions === 0) {
+    return {
+      input: puzzleString,
+      validity: 'valid',
+      solutions: 0,
+      solved: false,
+      difficulty: 'Unsolvable',
+      techniques,
+      steps: human.steps.slice(0, 5000),
+      solution: null
+    };
+  }
+
+  return {
+    input: puzzleString,
+    validity: 'valid',
+    solutions,
+    solved: human.status === 'solved' || (solutions >= 1 && !!uniq.solution),
+    difficulty,
+    techniques,
+    steps: human.steps.slice(0, 5000),
+    solution: uniq.solution
+  };
+}
+
+async function analyzeCurrent() {
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
+  document.getElementById('copyJsonBtn').disabled = true;
+  lastResultJson = null;
 
   try {
-    const input = getPuzzleStringFromTextarea();
+    const input = normalizeInput(document.getElementById('puzzle').value).replaceAll('0', '.');
+    updateLengthHint(input);
     if (input.length !== 81) throw new Error('Puzzle must be 81 characters.');
-    const result = analyzePuzzle(input.replaceAll('0', '.'));
+    showStatus('Working…');
+    const result = await analyzePuzzleAsync(input);
     buildResultUI(result);
   } catch (e) {
     showError(String(e && e.message ? e.message : e));
@@ -656,8 +635,6 @@ let exampleIndex = 0;
 function setPuzzleEverywhere(p) {
   setTextareaPuzzleString(p);
   setGridFromPuzzleString(p.replaceAll('0', '.'));
-  document.getElementById('copyJsonBtn').disabled = true;
-  lastResultJson = null;
   document.getElementById('out').innerHTML = '';
 }
 
@@ -666,12 +643,10 @@ document.getElementById('analyzeBtn').addEventListener('click', analyzeCurrent);
 document.getElementById('anotherExampleBtn').addEventListener('click', () => {
   exampleIndex = (exampleIndex + 1) % examples.length;
   setPuzzleEverywhere(examples[exampleIndex]);
-  updateLengthHint(examples[exampleIndex]);
 });
 
 document.getElementById('clearBtn').addEventListener('click', () => {
   setPuzzleEverywhere('.'.repeat(81));
-  updateLengthHint('.'.repeat(81));
 });
 
 document.getElementById('copyJsonBtn').addEventListener('click', async () => {
@@ -686,9 +661,9 @@ document.getElementById('copyJsonBtn').addEventListener('click', async () => {
 
 document.getElementById('shareBtn').addEventListener('click', async () => {
   try {
-    const input = getPuzzleStringFromTextarea();
+    const input = normalizeInput(document.getElementById('puzzle').value).replaceAll('0', '.');
     if (input.length !== 81) throw new Error('Puzzle must be 81 characters to share.');
-    const url = makeShareUrl(input.replaceAll('0', '.'));
+    const url = makeShareUrl(input);
     const ok = await copyToClipboard(url);
     const btn = document.getElementById('shareBtn');
     const old = btn.textContent;
@@ -700,9 +675,16 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('puzzle').addEventListener('input', () => {
-  syncFromTextareaToGrid();
-});
+document.getElementById('puzzle').addEventListener('input', syncFromTextareaToGrid);
+
+function setGridFromPuzzleString(p) {
+  const s = String(p || '').padEnd(81, '.').slice(0, 81);
+  const inputs = document.querySelectorAll('.sCell');
+  for (let i = 0; i < inputs.length; i++) {
+    const ch = s[i];
+    inputs[i].value = (ch >= '1' && ch <= '9') ? ch : '';
+  }
+}
 
 (function init() {
   buildInputGrid();
